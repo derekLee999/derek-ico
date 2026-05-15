@@ -31,6 +31,15 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "windows": {
+      "wix": {
+        "language": {
+          "zh-CN": {
+            "localePath": "./windows/zh-CN.wxl"
+          }
+        }
+      }
+    },
     "icon": [
       "icons/to-ico.png",
       "icons/icon.ico"
