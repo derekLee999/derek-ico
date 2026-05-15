@@ -145,11 +145,52 @@ async fn fetch_favicons(url: String) -> Result<Vec<FaviconData>, String> {
     favicon_fetcher::fetch_favicons(&url).await
 }
 
+fn restore_and_activate_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+
+    #[cfg(windows)]
+    force_activate_window(window);
+}
+
+#[cfg(windows)]
+fn force_activate_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
+    };
+
+    let Ok(window_handle) = window.window_handle() else {
+        return;
+    };
+
+    let RawWindowHandle::Win32(handle) = window_handle.as_raw() else {
+        return;
+    };
+
+    let hwnd = HWND(handle.hwnd.get() as *mut core::ffi::c_void);
+
+    unsafe {
+        let _ = ShowWindow(hwnd, SW_SHOW);
+        let _ = ShowWindow(hwnd, SW_RESTORE);
+        let _ = BringWindowToTop(hwnd);
+        let _ = SetForegroundWindow(hwnd);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     log::info!("[run] 启动图标提取器...");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            log::info!("[single_instance] 检测到重复启动，激活现有主窗口");
+            if let Some(window) = app.get_webview_window("main") {
+                restore_and_activate_window(&window);
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
